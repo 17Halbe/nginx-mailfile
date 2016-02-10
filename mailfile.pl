@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 
- use URI::Escape;
  use MIME::Words qw(:all);
  use File::Copy;
  use Archive::Zip qw( :ERROR_CODES :CONSTANTS );
@@ -80,8 +79,10 @@ foreach $line ( <STDIN> ) { #<STDIN>
 		$expiration_date = time() + $count * $multi;
 	}
 	elsif ($line =~ "From") {
-        $user_address = substr $line, index($line, '<') + 1, index($line, '>') - index($line, '<') - 1;
-        $user = substr $line, index($line, '<') + 1, index($line, '@') - index($line, '<') - 1;
+		$user_address = $line =~ <(.*?)> ;
+        #$user_address = substr $line, index($line, '<') + 1, index($line, '>') - index($line, '<') - 1;
+        $user = $line =~ (.*?)@ ;
+        #$user = substr $line, index($line, '<') + 1, index($line, '@') - index($line, '<') - 1;
 	}
 
 }
@@ -226,6 +227,3 @@ sub encodeLink {
     return "https://gar-nich.net".$path."?md5=".$hash."&expires=".$expiration_date;
     #http://gar-nich.net/downloads/dead?md5=GeqVkfkrcgRkDXVAVlcvYQ&expires=1454779728
 }
-# LpjlsecretMC2TBYRaW4On6FwljiUATRAz
-#1459742382
-#/downloads/BierXTeilX1.odt
