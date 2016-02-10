@@ -31,35 +31,41 @@ while (<CONFIG>) {
 }
 close CONFIG;
 
+my $LOG_FILE = "/var/mail/vmail/mail.log";
+open my $log, ">", $LOG_FILE or die("Could not open file. $!");
+
 open(my $mail, '>:encoding(UTF-8)', "$temp_dir$temp_file");
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454938904.M730684P4521.gar-nich.net,S=42303,W=42918') #simple folder 2 files
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454939017.M940764P4683.gar-nich.net,S=42495,W=43117') #simple zip 2 files
-open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454858578.M538173P16450.gar-nich.net,S=42520,W=43142') #complex folder 2 files
+#open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454858578.M538173P16450.gar-nich.net,S=42520,W=43142') #complex folder 2 files
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454842686.M860959P14143.gar-nich.net,S=9505,W=9681') #help
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454846794.M773903P14619.gar-nich.net,S=23893,W=24271') #zip, but 1 file
- or die "Could not open file $!";
+# or die "Could not open file $!";
 
-foreach $line ( <$fh> ) { #<STDIN>
+foreach $line ( <STDIN> ) { #<STDIN>
 	print $mail $line;
+#	print $log $line;
 	if ($line =~ "charset"
 		and $charset eq "") {
 		chomp($line);
 		$charset = substr $line, 9;
 		binmode($fh, ":encoding($charset)") or warn "invalid Charset found"; #STDIN
-		print "Charset: $charset\n";
+		print $log "Charset: $charset\n";
 	}
 	elsif ($line =~ "Subject: ") {
 		if (lc($line) =~ "subject: help" or
 				lc($line) =~ "subject: hilfe" or
 				lc($line) =~ "subject: anleitung") {
 			$exit_code = "help";
+			print $log "Help needed\n";
+			last;
 		}
 		else {#if (lc($line) =~ "zip") {
 			$link_name = substr $line, index($line, 'Subject:') + 9;
 			$link_name =~ s/^\s+|\s+$//g;
 			$link_name = decode_mimewords($link_name);
 			$link_name =~ s/\s/_/g;
-			print "Encoded Subject: <$link_name>\n";
+			print $log "Encoded Subject: <$link_name>\n";
 		}
 	}
 	elsif ($line =~ /^DAUER:/) {
@@ -87,46 +93,47 @@ close $fh;
 #$user = "alex";
 #####debug######
 
-
-if ($user_address eq "") {
-	$user_address = "$user\@gar-nich.net";
-	$exit_code = "no_address";
-}
-elsif ($expiration_date eq "") {
-	$exit_code = "no_expiration";
-}
-elsif ($exit_code eq "") {
-	my @files = `/usr/bin/munpack -C $temp_dir $temp_dir$temp_file`;
-	#print @files;
-	#delete the plain/text file:
-	@files = grep { $_ !~ "desc" } @files;
-	my $is_empty = grep { $_ =~ "Did not find anything to unpack" } @files;
-	if ($is_empty ne "0") {
-		$exit_code = "no_files";
+if ($exit_code eq "") {
+	if ($user_address eq "") {
+		$user_address = "$user\@gar-nich.net";
+		$exit_code = "no_address";
+	}
+	elsif ($expiration_date eq "") {
+		$exit_code = "no_expiration";
 	}
 	else {
-		print @files;
-		foreach my $i (0 .. $#files) {
-			$files[$i] = substr $files[$i], 0, index($files[$i], ' ');
+		my @files = `/usr/bin/munpack -C $temp_dir $temp_dir$temp_file`;
+		#print @files;
+		#delete the plain/text file:
+		@files = grep { $_ !~ "desc" } @files;
+		my $is_empty = grep { $_ =~ "Did not find anything to unpack" } @files;
+		if ($is_empty ne "0") {
+			$exit_code = "no_files";
 		}
-		my $path = processFiles(@files);
-		$encoded_link = encodeLink($path);
-		print "$encoded_link\n";
+		else {
+			print $log @files;
+			foreach my $i (0 .. $#files) {
+				$files[$i] = substr $files[$i], 0, index($files[$i], ' ');
+			}
+			my $path = processFiles(@files);
+			$encoded_link = encodeLink($path);
+			print $log "$encoded_link\n";
+		}
 	}
 }
-print "Exit-Code: $exit_code";
+print $log "Exit-Code: $exit_code\n";
 
 if ($exit_code eq "help") {
-#	send_mail($user_address, "Wie erstelle ich einen Download-link für eine Datei", $help_file);
+	send_mail($user_address, "Wie erstelle ich einen Download-link für eine Datei", $help_file);
 }
 elsif ($exit_code eq "no_files") {
-#	send_mail($user_address, "Keine Dateien gefunden :'(", $no_files_file);
+	send_mail($user_address, "Keine Dateien gefunden :'(", $no_files_file);
 }
 elsif ($exit_code eq "no_expiration") {
-#	send_mail($user_address, "Kein Ablaufdatum gefunden", $no_date_file);
+	send_mail($user_address, "Kein Ablaufdatum gefunden", $no_date_file);
 }
 elsif ($exit_code eq "invalid_time") {
-#   send_mail($user_address, "Falsche Zeitdauerangabe", $invalid_date_file);
+   send_mail($user_address, "Falsche Zeitdauerangabe", $invalid_date_file);
 }
 elsif ($exit_code eq "no_address") {
 	send_mail($user_address, "Tut mir Leid..", $denied_file);
@@ -145,7 +152,7 @@ close $mail;
 sub send_mail { #Subject, Body
 	my ($to, $subject, $content) = @_;
 	my $from = 'downloads@gar-nich.net';
-
+	print $log "Mail to $to: $subject Content: $content";
 	open(MAIL, "|/usr/sbin/sendmail -t");
 	# Email Header
 	print MAIL "To: $to\n";
@@ -164,16 +171,17 @@ sub send_mail { #Subject, Body
 		print MAIL $content;
 	}
 	close(MAIL);
+	print $log "Mail sent";
 }
 sub processFiles {
 	my (@files) = @_;
 	my $pathToEncode = "";
 	if ($#files == 0) {
 		move("$temp_dir$files[0]", "$download_folder$files[0]");
+		chmod 0644, "$download_folder$files[0]";
 		$pathToEncode = "$nginx_location$files[0]";
 	}
 	elsif (lc($link_name) =~ /zip$/) {
-		print "MAKE A ZIP\n";
 		$pathToEncode = "$nginx_location$link_name";
 		my $zip = Archive::Zip->new();
 		my $file_member = "";
@@ -183,6 +191,7 @@ sub processFiles {
 			$file_member->desiredCompressionLevel( 9 );
 		}
 		unless ( $zip->writeToFileNamed("$download_folder$link_name") == AZ_OK ) {die "Couldnt write Zip file"}
+		chmod 0644, "$download_folder$link_name";
 		foreach $file (@files) {
 			unlink "$temp_dir$file";
         }
@@ -195,23 +204,23 @@ sub processFiles {
 			$new_folder = $link_name . $i;
 			$i++;
 		}
-		print "New Folder: $download_folder$new_folder\n";
 		$new_folder = "$new_folder/";
 		mkdir "$download_folder$new_folder";
+		chmod 0644, "$download_folder$new_folder";
 		foreach $file (@files) {
 			move("$temp_dir$file", "$download_folder$new_folder$file");
+			chmod 0644, "$download_folder$new_folder$file";
         }
 		$pathToEncode = "$nginx_location$new_folder";
 	}
-	print $pathToEncode."\n";
 	return $pathToEncode;
 }
 
 sub encodeLink {
 	my ($path) = @_;
-	print "\nExpiration:\n$expiration_date\n";
-	print "Pfad:\n$path\n";
-	print "Secret:\n<$nginx_secret>\n";
+	print $log "\nExpiration:\n$expiration_date\n";
+	print $log "Pfad:\n$path\n";
+	print $log "Secret:\n<$nginx_secret>\n";
 	my $hash = `echo -n "$expiration_date$path$nginx_secret" | openssl md5 -binary | openssl base64 | tr +/ -_ | tr -d =`;
 	chomp($hash);
     return "https://gar-nich.net".$path."?md5=".$hash."&expires=".$expiration_date;
