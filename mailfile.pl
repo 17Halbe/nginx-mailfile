@@ -126,7 +126,9 @@ if ($exit_code eq "") {
 print $log "Exit-Code: $exit_code\n";
 
 if ($exit_code eq "help") {
-	send_mail($user_address, "Wie erstelle ich einen Download-link", $help_file);
+	#"=?utf-8?b?".base64_encode($Mailbetreff)."?=";
+	my $subject = "=?utf-8?b?".encode_mimewords("Wie erstelle ich einen Download-link für mich?äöü à")."?=";
+	send_mail($user_address, $subject, $help_file);
 }
 elsif ($exit_code eq "no_files") {
 	send_mail($user_address, "Keine Dateien gefunden :'(", $no_files_file);
