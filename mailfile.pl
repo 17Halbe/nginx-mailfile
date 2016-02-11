@@ -34,6 +34,7 @@ my $LOG_FILE = "/var/mail/vmail/mail.log";
 open my $log, ">", $LOG_FILE or die("Could not open file. $!");
 
 open(my $mail, '>:encoding(UTF-8)', "$temp_dir$temp_file");
+#open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1455116957.M815148P10554.gar-nich.net,S=5295,W=5390') #Sabine help mail
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454938904.M730684P4521.gar-nich.net,S=42303,W=42918') #simple folder 2 files
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454939017.M940764P4683.gar-nich.net,S=42495,W=43117') #simple zip 2 files
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454858578.M538173P16450.gar-nich.net,S=42520,W=43142') #complex folder 2 files
@@ -41,9 +42,10 @@ open(my $mail, '>:encoding(UTF-8)', "$temp_dir$temp_file");
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454846794.M773903P14619.gar-nich.net,S=23893,W=24271') #zip, but 1 file
 # or die "Could not open file $!";
 
-foreach $line ( <STDIN> ) { #<STDIN>
+#foreach $line ( <$fh> ) { 
+foreach $line ( <STDIN> ) {
 	print $mail $line;
-#	print $log $line;
+	print $log $line;
 	if ($line =~ "charset"
 		and $charset eq "") {
 		chomp($line);
@@ -57,7 +59,6 @@ foreach $line ( <STDIN> ) { #<STDIN>
 				lc($line) =~ "subject: anleitung") {
 			$exit_code = "help";
 			print $log "Help needed\n";
-			last;
 		}
 		else {#if (lc($line) =~ "zip") {
 			$link_name = substr $line, index($line, 'Subject:') + 9;
@@ -67,7 +68,8 @@ foreach $line ( <STDIN> ) { #<STDIN>
 			print $log "Encoded Subject: <$link_name>\n";
 		}
 	}
-	elsif ($line =~ /^DAUER:/) {
+	elsif ($line =~ "DAUER:" 
+			and $expiration_date eq "") {
 		$expiration_date = substr $line, index($line, 'DAUER:') + 7;
 		$expiration_date =~ s/^\s+|\s+$//g;
 		my ($count, $multi) = split / /, $expiration_date;
@@ -78,11 +80,9 @@ foreach $line ( <STDIN> ) { #<STDIN>
 		else {$exit_code = "invalid_time";last;}
 		$expiration_date = time() + $count * $multi;
 	}
-	elsif ($line =~ "From") {
-		$user_address = $line =~ <(.*?)> ;
-        #$user_address = substr $line, index($line, '<') + 1, index($line, '>') - index($line, '<') - 1;
-        $user = $line =~ (.*?)@ ;
-        #$user = substr $line, index($line, '<') + 1, index($line, '@') - index($line, '<') - 1;
+	elsif ($line =~ /^From.*/) {
+		($user_address) = $line =~ /<(.*?)>/ ;
+        ($user) = $user_address =~ /(.*?)@/;
 	}
 
 }
@@ -107,6 +107,7 @@ if ($exit_code eq "") {
 		#print @files;
 		#delete the plain/text file:
 		@files = grep { $_ !~ "desc" } @files;
+		@files = grep { $_ !~ "smime.p7" } @files;
 		my $is_empty = grep { $_ =~ "Did not find anything to unpack" } @files;
 		if ($is_empty ne "0") {
 			$exit_code = "no_files";
@@ -125,7 +126,7 @@ if ($exit_code eq "") {
 print $log "Exit-Code: $exit_code\n";
 
 if ($exit_code eq "help") {
-	send_mail($user_address, "Wie erstelle ich einen Download-link für eine Datei", $help_file);
+	send_mail($user_address, "Wie erstelle ich einen Download-link", $help_file);
 }
 elsif ($exit_code eq "no_files") {
 	send_mail($user_address, "Keine Dateien gefunden :'(", $no_files_file);
@@ -146,43 +147,52 @@ else {
 	my $expire_date = scalar localtime($expiration_date);
 	my $mail_body = sprintf $mail_body, $encoded_link, $expire_date;
 	send_mail($user_address, "Link wurde erstellt!", $mail_body);
-
+	print $log "generating atd command: " . `echo 'rm /var/www/downloads/image1.* && echo "Inhalt?" | mail alex@gar-nich.net -s "Test mal wieder"' | at now + 1min`;
 }
+#print {$mail};
 close $mail;
 
 sub send_mail { #Subject, Body
 	my ($to, $subject, $content) = @_;
 	my $from = 'downloads@gar-nich.net';
-	print $log "Mail to $to: $subject Content: $content";
+	print $log "Mail to $to: $subject Content: $content\n";
 	open(MAIL, "|/usr/sbin/sendmail -t");
 	# Email Header
 	print MAIL "To: $to\n";
 	print MAIL "From: $from\n";
 	print MAIL "Subject: $subject\n\n";
 	# Email Body
-	if (-e $content ) {
-		open my $msg_line, '<', "$config_dir$file" or die "can't open $file: $!";
-		while (<$msg_line>) {
+	if (-e "$config_dir$content" ) {
+		print $log "Lade Nachricht aus Template\n";
+		open my $mail_file, '<', "$config_dir$content" 
+				or die "can't open $content: $!";
+		my $mail_body = do { local $/; <$mail_file> }; #read the whole file into mail_body
+		print MAIL $mail_body;
+#		while (<$msg_line>) {
 	#    	chomp;
-			print MAIL $msg_line;
-		}
-		close $msg_line or die "can't close $file: $!";
+#			print MAIL $msg_line;
+#		}
+		close $mail_file or die "can't close $content: $!";
 	}
 	else {
+		print $log "Sending Content: $content\n";
 		print MAIL $content;
 	}
 	close(MAIL);
-	print $log "Mail sent";
+	print $log "Mail sent\n";
 }
 sub processFiles {
 	my (@files) = @_;
 	my $pathToEncode = "";
+	print "Files: @files";
 	if ($#files == 0) {
+		print "Single-File found\n";
 		move("$temp_dir$files[0]", "$download_folder$files[0]");
 		chmod 0644, "$download_folder$files[0]";
 		$pathToEncode = "$nginx_location$files[0]";
 	}
 	elsif (lc($link_name) =~ /zip$/) {
+		print "Files to ZIP found\n";
 		$pathToEncode = "$nginx_location$link_name";
 		my $zip = Archive::Zip->new();
 		my $file_member = "";
@@ -198,6 +208,7 @@ sub processFiles {
         }
 	}
 	else {
+		print "Files -> Folder";
 		my $i = 0;
 		my $new_folder = $link_name;
 		#if ($new_folder eq "") {$new_folder = "download_folder"} #not needed, since default value = download_folder
@@ -207,9 +218,11 @@ sub processFiles {
 		}
 		$new_folder = "$new_folder/";
 		mkdir "$download_folder$new_folder";
-		chmod 0644, "$download_folder$new_folder";
+		chmod 0755, "$download_folder$new_folder" 
+					or print $log "Couldn't change Permissions on directory";
 		foreach $file (@files) {
-			move("$temp_dir$file", "$download_folder$new_folder$file");
+			move("$temp_dir$file", "$download_folder$new_folder$file") 
+					or print $log "Couldn't move $temp_dir$file to $download_folder$new_folder$file: $!";
 			chmod 0644, "$download_folder$new_folder$file";
         }
 		$pathToEncode = "$nginx_location$new_folder";
