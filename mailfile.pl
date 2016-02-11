@@ -9,7 +9,7 @@ my $config_dir = "/etc/mailfile/";
 my $user_address = "";
 my $user = "";
 my $exit_code = "";
-my $link_name = "download_folder";
+my $link_name = "";
 my $encoded_link = "";
 my $charset = "";
 
@@ -127,7 +127,7 @@ print $log "Exit-Code: $exit_code\n";
 
 if ($exit_code eq "help") {
 	#"=?utf-8?b?".base64_encode($Mailbetreff)."?=";
-	my $subject = "=?utf-8?b?".encode_mimewords("Wie erstelle ich einen Download-link für mich?äöü à")."?=";
+	my $subject = "=?utf-8?q?".encode_mimewords("Wie erstelle ich einen Download-link für mich?äöü à")."?=";
 	send_mail($user_address, $subject, $help_file);
 }
 elsif ($exit_code eq "no_files") {
@@ -149,7 +149,7 @@ else {
 	my $expire_date = scalar localtime($expiration_date);
 	my $mail_body = sprintf $mail_body, $encoded_link, $expire_date;
 	send_mail($user_address, "Link wurde erstellt!", $mail_body);
-	print $log "generating atd command: " . `echo 'rm /var/www/downloads/image1.* && echo "Inhalt?" | mail alex@gar-nich.net -s "Test mal wieder"' | at now + 1min`;
+	print $log "generating atd command: " . `echo 'rm $download_folder$link_name && echo "Die von Dir irgendwann hochgeladene Datei: $link_name wurde soeben gelöscht." | mail alex@gar-nich.net -s "Abgelaufene Datei gelöscht!"' | at now + 1min`;
 }
 #print {$mail};
 close $mail;
@@ -192,9 +192,11 @@ sub processFiles {
 		move("$temp_dir$files[0]", "$download_folder$files[0]");
 		chmod 0644, "$download_folder$files[0]";
 		$pathToEncode = "$nginx_location$files[0]";
+		$link_name = $files[0];
 	}
-	elsif (lc($link_name) =~ /zip$/) {
+	else { #if (lc($link_name) =~ /zip$/) {
 		print "Files to ZIP found\n";
+		if (lc($link_name) !~ /zip$/) {$link_name = $link_name.".zip"}
 		$pathToEncode = "$nginx_location$link_name";
 		my $zip = Archive::Zip->new();
 		my $file_member = "";
@@ -209,26 +211,26 @@ sub processFiles {
 			unlink "$temp_dir$file";
         }
 	}
-	else {
-		print "Files -> Folder";
-		my $i = 0;
-		my $new_folder = $link_name;
-		#if ($new_folder eq "") {$new_folder = "download_folder"} #not needed, since default value = download_folder
-		while (-d "$download_folder$new_folder") {
-			$new_folder = $link_name . $i;
-			$i++;
-		}
-		$new_folder = "$new_folder/";
-		mkdir "$download_folder$new_folder";
-		chmod 0755, "$download_folder$new_folder" 
-					or print $log "Couldn't change Permissions on directory";
-		foreach $file (@files) {
-			move("$temp_dir$file", "$download_folder$new_folder$file") 
-					or print $log "Couldn't move $temp_dir$file to $download_folder$new_folder$file: $!";
-			chmod 0644, "$download_folder$new_folder$file";
-        }
-		$pathToEncode = "$nginx_location$new_folder";
-	}
+#	else {
+#		print "Files -> Folder";
+#		my $i = 0;
+#		my $new_folder = $link_name;
+#		#if ($new_folder eq "") {$new_folder = "download_folder"} #not needed, since default value = download_folder
+#		while (-d "$download_folder$new_folder") {
+#			$new_folder = $link_name . $i;
+#			$i++;
+#		}
+#		$new_folder = "$new_folder/";
+#		mkdir "$download_folder$new_folder";
+#		chmod 0755, "$download_folder$new_folder" 
+#					or print $log "Couldn't change Permissions on directory";
+#		foreach $file (@files) {
+#			move("$temp_dir$file", "$download_folder$new_folder$file") 
+#					or print $log "Couldn't move $temp_dir$file to $download_folder$new_folder$file: $!";
+#			chmod 0644, "$download_folder$new_folder$file";
+ #       }
+#		$pathToEncode = "$nginx_location$new_folder";
+#	}
 	return $pathToEncode;
 }
 
