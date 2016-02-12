@@ -3,7 +3,7 @@ Hallo Du da!
 Du willst also eine Datei zum Download anbieten? Super, geht ganz einfach! Sagt zumindest Alex…
 
 So ist der Ablauf:
-Du antwortest auf diese Mail, indem Du Dich an die Anleitung hältst, die Dateien anhängst und diese Mail (WICHTIG) von Deinem @gar-nich.net Account schickst. Du erhältst dann eine Mail zurück, indem sich der Download-Link befindet.
+Du antwortest auf diese Mail, indem Du Dich an die Anleitung hältst, die Dateien anhängst und diese Mail (WICHTIG) von Deinem @gar-nich.net Account schickst. Du erhältst dann eine Mail zurück, indem sich der Download-Link befindet. 
 Außerdem bekommst Du eine Nachricht, kurz bevor die Gültigkeit des Download-Links erlöscht und die Datei entfernt wird.(1 Woche).
 
 Wie lange soll die Datei/en runterladbar bleiben?
@@ -11,21 +11,23 @@ Bitte anpassen! Falls nichts geändert wird, ist die Datei, wie ja doch leicht e
 (Erlaubte Werte sind: Jahr Jahre Monat Monate Woche Wochen Tag Tage)
 
 DAUER: 2 Monate
+(Entweder hier ändern, oder selbst weiter oben eingeben(Auf Blockschrift und den Doppelpunkt achten). Der erste "DAUER:" Eintrag wird benutzt.)
 
 Es gibt folgende Möglichkeiten:
+
+
 Einzelne Datei hochladen:
+-------------------------
+
 Oben bei Dauer angeben, bis wann die Datei runterladbar sein soll
 Datei an diese E-Mail anhängen
 Email an download@gar-nich.net schicken
 
-Mehrere Dateien hochladen und als Zip-Datei anbieten:
-Oben im Betreff den Namen der zu erstellenden Zip-Datei eingeben (WICHTIG: mit Endung .zip) (z.B.: Super-Projekt.zip)
-Oben bei Dauer angeben, bis wann die Datei runterladbar sein soll
-Dateien an diese E-Mail anhängen
-Email an download@gar-nich.net schicken
 
-Mehrere Dateien hochladen und jede Datei einzeln runterladbar lassen:
-Oben im Betreff den Namen des zu erstellenden Download-Ordners eingeben (z.B.: für "Super-Projekt” würde sich folgender Link ergeben: http://gar-nich.net/downloads/Super-Projekt/ unter dem dann alle Dateien angeboten würden)
+Mehrere Dateien hochladen und als Zip-Datei anbieten:
+-----------------------------------------------------
+
+Oben im Betreff den Namen der zu erstellenden Zip-Datei eingeben (WICHTIG: mit Endung .zip) (z.B.: Super-Projekt.zip)
 Oben bei Dauer angeben, bis wann die Datei runterladbar sein soll
 Dateien an diese E-Mail anhängen
 Email an download@gar-nich.net schicken

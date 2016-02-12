@@ -9,7 +9,7 @@ my $config_dir = "/etc/mailfile/";
 my $user_address = "";
 my $user = "";
 my $exit_code = "";
-my $link_name = "";
+my $link_name = "generic.zip";
 my $encoded_link = "";
 my $charset = "";
 
@@ -144,12 +144,55 @@ elsif ($exit_code eq "no_address") {
 	send_mail("alex\@gar-nich.net", "Unauthorisierter Zugriff von Nutzer: >$user< (Addresse: >$user_address<)!", $mail);
 }
 else {
+	my $min_from_now = ($expiration_date - time) / 60;
+	# Send 'SUCCESS' File containing download link
 	open my $mail_file, '<', "$config_dir$success_file" or die "can't open $file: $!";
 	my $mail_body = do { local $/; <$mail_file> }; #read the whole file into mail_body
 	my $expire_date = scalar localtime($expiration_date);
-	my $mail_body = sprintf $mail_body, $encoded_link, $expire_date;
+	$mail_body = sprintf $mail_body, $encoded_link, $expire_date;
 	send_mail($user_address, "Link wurde erstellt!", $mail_body);
-	print $log "generating atd command: " . `echo 'rm $download_folder$link_name && echo "Die von Dir irgendwann hochgeladene Datei: $link_name wurde soeben gelöscht." | mail alex@gar-nich.net -s "Abgelaufene Datei gelöscht!"' | at now + 1min`;
+	close $mail_file;
+
+	#schedule 1 week warning
+	my $send_date = $min_from_now - ( 7 * 24 * 60 );
+	if ($send_date > 1440) { #just send a reminder if one week before expiration is at least 1 day away
+		open my $mail_file, '<', "$config_dir$reminder_file" or die "can't open $file: $!";
+		$mail_body = do { local $/; <$mail_file> };
+	    $mail_body = sprintf $mail_body, $link_name, $expire_date, $encoded_link;
+		close $mail_file;
+		open my $script_file, '>', $config_dir."notifications/pre-".$link_name.".list" or die "can't open pre-".$link_name.".list: $!";
+		print $script_file $config_dir.qq(at_mail.pl $user_address 'Datei $link_name wird in ner Woche gelöscht!' ).$config_dir."notifications/pre-$link_name.txt";
+		print $script_file "rm ".$config_dir."notifications/pre-".$link_name.".txt\n";
+    	print $script_file "rm ".$config_dir."notifications/pre-".$link_name.".list\n";
+		close $script_file;
+		open my $pre_msg_file, '>', $config_dir."notifications/pre-".$link_name.".txt" or die "can't open pre-".$link_name.".list: $!";
+		print $pre_msg_file $mail_body;
+		close $pre_msg_file;
+		print $log "at -f ".$config_dir."notifications/pre-".$link_name.".list now + 2min\n";
+		my $list_file = $config_dir."notifications/pre-".$link_name.".list";
+		`at -f $list_file now + $send_date`;
+	}
+	#schedule file deleted msg
+	$send_date = $min_from_now + 1;
+	open $mail_file, '<', "$config_dir$delete_file" or die "can't open $file: $!";
+	$mail_body = do { local $/; <$mail_file> };
+	$mail_body = sprintf $mail_body, $link_name;
+	close $mail_file;
+	open $script_file, '>', $config_dir."notifications/post-".$link_name.".list" or die "can't open post-".$link_name.".list: $!";
+	print $script_file "rm $download_folder$link_name\n";
+    print $script_file $config_dir.qq(at_mail.pl $user_address 'Datei $link_name wurde gelöscht!' ).$config_dir."notifications/post-$link_name.txt";
+	print $script_file "rm ".$config_dir."notifications/post-".$link_name.".txt\n";
+	print $script_file "rm ".$config_dir."notifications/post-".$link_name.".list\n";
+    close $script_file;
+    open my $post_msg_file, '>', $config_dir."notifications/post-".$link_name.".txt" or die "can't open post-".$link_name.".list: $!";
+    print $post_msg_file $mail_body;
+    close $post_msg_file;
+    print $log "at -f ".$config_dir."notifications/post-".$link_name.".list now + \n";
+    $list_file = $config_dir."notifications/post-".$link_name.".list";
+    `at -f $list_file now + $send_date`;
+	print $log `atq`;
+	print $log "Alles gut/n";
+	close $mail_file;	
 }
 #print {$mail};
 close $mail;
@@ -157,7 +200,7 @@ close $mail;
 sub send_mail { #Subject, Body
 	my ($to, $subject, $content) = @_;
 	my $from = 'downloads@gar-nich.net';
-	print $log "Mail to $to: $subject Content: $content\n";
+	#print $log "Mail to $to: $subject Content: $content\n";
 	open(MAIL, "|/usr/sbin/sendmail -t");
 	# Email Header
 	print MAIL "To: $to\n";
@@ -177,12 +220,13 @@ sub send_mail { #Subject, Body
 		close $mail_file or die "can't close $content: $!";
 	}
 	else {
-		print $log "Sending Content: $content\n";
+		#print $log "Sending Content: $content\n";
 		print MAIL $content;
 	}
 	close(MAIL);
-	print $log "Mail sent\n";
+	print $log "Mail $subject sent\n";
 }
+
 sub processFiles {
 	my (@files) = @_;
 	my $pathToEncode = "";
@@ -197,6 +241,14 @@ sub processFiles {
 	else { #if (lc($link_name) =~ /zip$/) {
 		print "Files to ZIP found\n";
 		if (lc($link_name) !~ /zip$/) {$link_name = $link_name.".zip"}
+		my $i = 0;
+        my $new_filename = $link_name;
+       #if ($new_filename eq "") {$new_filename = "generic.zip"} #not needed, since default value = download_folder
+       while (-e "$download_folder$new_filename") {
+           $new_filename = $i . $link_name;
+           $i++;
+       }
+		$link_name = $new_filename;
 		$pathToEncode = "$nginx_location$link_name";
 		my $zip = Archive::Zip->new();
 		my $file_member = "";
