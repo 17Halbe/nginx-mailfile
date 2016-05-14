@@ -12,9 +12,8 @@ my $exit_code = "";
 my $link_name = "generic.zip";
 my $encoded_link = "";
 my $charset = "";
-
 #require ($config_dir."mailfile-config.pl");
-open(CONFIG,$config_dir."mailfile.conf") or die "No config file found: $_";
+open(CONFIG,$config_dir."mailfile.conf") or print $log "No config file found: $_";
 
 no strict 'refs';
 while (<CONFIG>) {
@@ -31,7 +30,7 @@ while (<CONFIG>) {
 close CONFIG;
 
 my $LOG_FILE = "/var/mail/vmail/mail.log";
-open my $log, ">", $LOG_FILE or die("Could not open file. $!");
+open my $log, ">", $LOG_FILE or print $log("Could not open file. $!");
 
 open(my $mail, '>:encoding(UTF-8)', "$temp_dir$temp_file");
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1455116957.M815148P10554.gar-nich.net,S=5295,W=5390') #Sabine help mail
@@ -40,12 +39,12 @@ open(my $mail, '>:encoding(UTF-8)', "$temp_dir$temp_file");
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454858578.M538173P16450.gar-nich.net,S=42520,W=43142') #complex folder 2 files
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454842686.M860959P14143.gar-nich.net,S=9505,W=9681') #help
 #open(my $fh, '<:encoding(UTF-8)', '/var/mail/vmail/gar-nich.net/downloads/mail/new/1454846794.M773903P14619.gar-nich.net,S=23893,W=24271') #zip, but 1 file
-# or die "Could not open file $!";
+# or print $log "Could not open file $!";
 
-#foreach $line ( <$fh> ) { 
+#foreach $line ( <$fh> ) {
 foreach $line ( <STDIN> ) {
 	print $mail $line;
-	print $log $line;
+#	print $log $line;
 	if ($line =~ "charset"
 		and $charset eq "") {
 		chomp($line);
@@ -68,7 +67,7 @@ foreach $line ( <STDIN> ) {
 			print $log "Encoded Subject: <$link_name>\n";
 		}
 	}
-	elsif ($line =~ "DAUER:" 
+	elsif ($line =~ "DAUER:"
 			and $expiration_date eq "") {
 		$expiration_date = substr $line, index($line, 'DAUER:') + 7;
 		$expiration_date =~ s/^\s+|\s+$//g;
@@ -93,6 +92,7 @@ close $fh;
 #$expiration_date = "234";
 #$user = "alex";
 #####debug######
+print $log "Done Parsing. Exit-Code: $exit_code\n";
 
 if ($exit_code eq "") {
 	if ($user_address eq "") {
@@ -103,8 +103,9 @@ if ($exit_code eq "") {
 		$exit_code = "no_expiration";
 	}
 	else {
+		print $log "Extracting to $temp_dir$temp_file \n";
 		my @files = `/usr/bin/munpack -C $temp_dir $temp_dir$temp_file`;
-		#print @files;
+		print $log "Attachments extracted: @files \n";
 		#delete the plain/text file:
 		@files = grep { $_ !~ "desc" } @files;
 		@files = grep { $_ !~ "smime.p7" } @files;
@@ -123,11 +124,11 @@ if ($exit_code eq "") {
 		}
 	}
 }
-print $log "Exit-Code: $exit_code\n";
+print $log "Done Parsing. Exit-Code: $exit_code\n";
 
 if ($exit_code eq "help") {
 	#"=?utf-8?b?".base64_encode($Mailbetreff)."?=";
-	my $subject = "=?utf-8?q?".encode_mimewords("Wie erstelle ich einen Download-link für mich?äöü à")."?=";
+	my $subject = "Wie erstelle ich einen Download-link für eine per Mail versendete Datei?";
 	send_mail($user_address, $subject, $help_file);
 }
 elsif ($exit_code eq "no_files") {
@@ -145,8 +146,9 @@ elsif ($exit_code eq "no_address") {
 }
 else {
 	my $min_from_now = ($expiration_date - time) / 60;
+	print $log "Minutes from now: $min_from_now Expiration Date in epoch: $expiration_date Time in Epoch: ".time;
 	# Send 'SUCCESS' File containing download link
-	open my $mail_file, '<', "$config_dir$success_file" or die "can't open $file: $!";
+	open my $mail_file, '<', "$config_dir$success_file" or print $log "can't open $file: $!";
 	my $mail_body = do { local $/; <$mail_file> }; #read the whole file into mail_body
 	my $expire_date = scalar localtime($expiration_date);
 	$mail_body = sprintf $mail_body, $encoded_link, $expire_date;
@@ -155,49 +157,55 @@ else {
 
 	#schedule 1 week warning
 	my $send_date = $min_from_now - ( 7 * 24 * 60 );
-	if ($send_date > 1440) { #just send a reminder if one week before expiration is at least 1 day away
-		open my $mail_file, '<', "$config_dir$reminder_file" or die "can't open $file: $!";
-		$mail_body = do { local $/; <$mail_file> };
-	    $mail_body = sprintf $mail_body, $link_name, $expire_date, $encoded_link;
+	print $log "Minutes from now: $send_date\n";
+	if ($send_date > 1439) { #just send a reminder if one week before expiration is at least 1 day away
+		$send_date .= "min";
+		print $log "Sende Datum für 1 Woche vorher: ".$send_date."\n";
+		open my $mail_file, '<', "$config_dir$reminder_file" or print $log "can't open $reminder_file: $!\n";
+			$mail_body = do { local $/; <$mail_file> };
+			my $today = localtime;
+	    	$mail_body = sprintf $mail_body, $today, $link_name, $expire_date, $encoded_link;
 		close $mail_file;
-		open my $script_file, '>', $config_dir."notifications/pre-".$link_name.".list" or die "can't open pre-".$link_name.".list: $!";
-		print $script_file $config_dir.qq(at_mail.pl $user_address 'Datei $link_name wird in ner Woche gelöscht!' ).$config_dir."notifications/pre-$link_name.txt";
-		print $script_file "rm ".$config_dir."notifications/pre-".$link_name.".txt\n";
-    	print $script_file "rm ".$config_dir."notifications/pre-".$link_name.".list\n";
+		open my $script_file, '>', $config_dir."notifications/pre-".$link_name.".list" or print $log "can't open pre-".$link_name.".list: $!\n";
+			print $script_file $config_dir.qq(at_mail.pl $user_address 'Datei $link_name wird in ner Woche gelöscht!' ).$config_dir."notifications/pre-$link_name.txt\n";
+			print $script_file "rm ".$config_dir."notifications/pre-".$link_name.".txt\n";
+    		print $script_file "rm ".$config_dir."notifications/pre-".$link_name.".list\n";
 		close $script_file;
-		open my $pre_msg_file, '>', $config_dir."notifications/pre-".$link_name.".txt" or die "can't open pre-".$link_name.".list: $!";
-		print $pre_msg_file $mail_body;
+		open my $pre_msg_file, '>', $config_dir."notifications/pre-".$link_name.".txt" or print $log "can't open pre-".$link_name.".txt: $!\n";
+			print $pre_msg_file $mail_body;
 		close $pre_msg_file;
-		print $log "at -f ".$config_dir."notifications/pre-".$link_name.".list now + 2min\n";
+		print $log "at -f ".$config_dir."notifications/pre-".$link_name.".list now + $send_date\n";
 		my $list_file = $config_dir."notifications/pre-".$link_name.".list";
 		`at -f $list_file now + $send_date`;
 	}
 	#schedule file deleted msg
 	$send_date = $min_from_now + 1;
-	open $mail_file, '<', "$config_dir$delete_file" or die "can't open $file: $!";
-	$mail_body = do { local $/; <$mail_file> };
-	$mail_body = sprintf $mail_body, $link_name;
+	$send_date .= "min";
+    print $log "Sende Datum für das Löschdatum: now +  ".$send_date."\n";
+	open $mail_file, '<', "$config_dir$delete_file" or print $log "can't open $file: $!\n";
+		$mail_body = do { local $/; <$mail_file> };
+		$mail_body = sprintf $mail_body, $link_name;
 	close $mail_file;
-	open $script_file, '>', $config_dir."notifications/post-".$link_name.".list" or die "can't open post-".$link_name.".list: $!";
-	print $script_file "rm $download_folder$link_name\n";
-    print $script_file $config_dir.qq(at_mail.pl $user_address 'Datei $link_name wurde gelöscht!' ).$config_dir."notifications/post-$link_name.txt";
-	print $script_file "rm ".$config_dir."notifications/post-".$link_name.".txt\n";
-	print $script_file "rm ".$config_dir."notifications/post-".$link_name.".list\n";
+	open $script_file, '>', $config_dir."notifications/post-".$link_name.".list" or print $log "can't open post-".$link_name.".list: $!\n";
+		print $script_file "rm $download_folder$link_name\n";
+    	print $script_file $config_dir.qq(at_mail.pl $user_address 'Datei $link_name wurde gelöscht!' ).$config_dir."notifications/post-$link_name.txt\n";
+		print $script_file "rm ".$config_dir."notifications/post-".$link_name.".txt\n";
+		print $script_file "rm ".$config_dir."notifications/post-".$link_name.".list\n";
     close $script_file;
-    open my $post_msg_file, '>', $config_dir."notifications/post-".$link_name.".txt" or die "can't open post-".$link_name.".list: $!";
-    print $post_msg_file $mail_body;
+    open my $post_msg_file, '>', $config_dir."notifications/post-".$link_name.".txt" or print $log "can't open post-".$link_name.".list: $!\n";
+	    print $post_msg_file $mail_body;
     close $post_msg_file;
-    print $log "at -f ".$config_dir."notifications/post-".$link_name.".list now + \n";
     $list_file = $config_dir."notifications/post-".$link_name.".list";
+    print $log "at -f $list_file now + $send_date\n";
     `at -f $list_file now + $send_date`;
 	print $log `atq`;
 	print $log "Alles gut/n";
-	close $mail_file;	
 }
 #print {$mail};
 close $mail;
 
 sub send_mail { #Subject, Body
+	print $log "============ Sub send_mail =============\n";
 	my ($to, $subject, $content) = @_;
 	my $from = 'downloads@gar-nich.net';
 	#print $log "Mail to $to: $subject Content: $content\n";
@@ -209,15 +217,15 @@ sub send_mail { #Subject, Body
 	# Email Body
 	if (-e "$config_dir$content" ) {
 		print $log "Lade Nachricht aus Template\n";
-		open my $mail_file, '<', "$config_dir$content" 
-				or die "can't open $content: $!";
+		open my $mail_file, '<', "$config_dir$content"
+				or print $log "can't open $content: $!";
 		my $mail_body = do { local $/; <$mail_file> }; #read the whole file into mail_body
 		print MAIL $mail_body;
 #		while (<$msg_line>) {
 	#    	chomp;
 #			print MAIL $msg_line;
 #		}
-		close $mail_file or die "can't close $content: $!";
+		close $mail_file or print $log "can't close $content: $!";
 	}
 	else {
 		#print $log "Sending Content: $content\n";
@@ -228,18 +236,19 @@ sub send_mail { #Subject, Body
 }
 
 sub processFiles {
+	print $log "============ Sub ProcessFiles =============\n";
 	my (@files) = @_;
 	my $pathToEncode = "";
-	print "Files: @files";
+	print $log "Processing Files: @files";
 	if ($#files == 0) {
-		print "Single-File found\n";
+		print $log "Single-File found\n";
 		move("$temp_dir$files[0]", "$download_folder$files[0]");
 		chmod 0644, "$download_folder$files[0]";
 		$pathToEncode = "$nginx_location$files[0]";
 		$link_name = $files[0];
 	}
 	else { #if (lc($link_name) =~ /zip$/) {
-		print "Files to ZIP found\n";
+		print $log "Files to ZIP found\n";
 		if (lc($link_name) !~ /zip$/) {$link_name = $link_name.".zip"}
 		my $i = 0;
         my $new_filename = $link_name;
@@ -257,14 +266,14 @@ sub processFiles {
 			$file_member->desiredCompressionMethod(COMPRESSION_DEFLATED);
 			$file_member->desiredCompressionLevel( 9 );
 		}
-		unless ( $zip->writeToFileNamed("$download_folder$link_name") == AZ_OK ) {die "Couldnt write Zip file"}
+		unless ( $zip->writeToFileNamed("$download_folder$link_name") == AZ_OK ) {print $log "Couldnt write Zip file"}
 		chmod 0644, "$download_folder$link_name";
 		foreach $file (@files) {
 			unlink "$temp_dir$file";
         }
 	}
 #	else {
-#		print "Files -> Folder";
+#		print $log "Files -> Folder";
 #		my $i = 0;
 #		my $new_folder = $link_name;
 #		#if ($new_folder eq "") {$new_folder = "download_folder"} #not needed, since default value = download_folder
@@ -274,10 +283,10 @@ sub processFiles {
 #		}
 #		$new_folder = "$new_folder/";
 #		mkdir "$download_folder$new_folder";
-#		chmod 0755, "$download_folder$new_folder" 
+#		chmod 0755, "$download_folder$new_folder"
 #					or print $log "Couldn't change Permissions on directory";
 #		foreach $file (@files) {
-#			move("$temp_dir$file", "$download_folder$new_folder$file") 
+#			move("$temp_dir$file", "$download_folder$new_folder$file")
 #					or print $log "Couldn't move $temp_dir$file to $download_folder$new_folder$file: $!";
 #			chmod 0644, "$download_folder$new_folder$file";
  #       }
@@ -287,6 +296,7 @@ sub processFiles {
 }
 
 sub encodeLink {
+	print $log "============ Sub encodeLink =============\n";
 	my ($path) = @_;
 	print $log "\nExpiration:\n$expiration_date\n";
 	print $log "Pfad:\n$path\n";
@@ -296,3 +306,4 @@ sub encodeLink {
     return "https://gar-nich.net".$path."?md5=".$hash."&expires=".$expiration_date;
     #http://gar-nich.net/downloads/dead?md5=GeqVkfkrcgRkDXVAVlcvYQ&expires=1454779728
 }
+
